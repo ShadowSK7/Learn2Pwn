@@ -248,7 +248,7 @@ def index():
 
 @app.route("/robots.txt")
 def robots():
-    body = "User-agent: *\nDisallow: /admin\n"
+    body = "User-agent: *\nDisallow: /admin_manage\n"
     return Response(body, mimetype="text/plain")
 
 
@@ -471,7 +471,7 @@ def admin_required(view):
     return wrapped
 
 
-@app.route("/admin")
+@app.route("/admin_manage")
 @admin_required
 def admin_panel():
     users = get_db().execute("SELECT * FROM users ORDER BY id").fetchall()
@@ -479,7 +479,7 @@ def admin_panel():
     return render_template("admin.html", users=users, total=total)
 
 
-@app.route("/admin/adjust", methods=["POST"])
+@app.route("/admin_manage/adjust", methods=["POST"])
 @admin_required
 def admin_adjust():
     db = get_db()

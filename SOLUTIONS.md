@@ -6,17 +6,21 @@
 (security through obscurity). It has no authentication or authorization check.
 
 1. Register an account. You start with $100.
-2. Find hidden paths, using either:
-   - `curl http://127.0.0.1:5000/robots.txt`, which shows `Disallow: /admin`
-   - or brute-force directories: `gobuster dir -u http://127.0.0.1:5000 -w /usr/share/wordlists/dirb/common.txt`
-     (dirb's own default wordlist, `/usr/share/wordlists/dirb/common.txt`, finds it too -
-     it has `admin`, just not `admin-panel`)
-3. Open `/admin`. It works even when you're logged out.
+2. Find the hidden path. Brute-forcing with a default wordlist (dirb's `common.txt`,
+   gobuster/ffuf/feroxbuster with the same list) **won't find it** - `admin_manage` isn't a
+   common wordlist word. Check `robots.txt` instead:
+   ```bash
+   curl http://127.0.0.1:5000/robots.txt
+   ```
+   which shows `Disallow: /admin_manage` - the lesson here is that `robots.txt` is itself a
+   reconnaissance source, separate from wordlist brute-forcing, and sites sometimes list the
+   very paths they're trying to hide.
+3. Open `/admin_manage`. It works even when you're logged out.
 4. Use "Manual balance adjustment" to credit your user with at least $1,900.
    With curl (the first user you register after starting the app gets id 6; accounts 1-5 are seeded -
    see the "Seed accounts" section of the README):
    ```bash
-   curl -X POST http://127.0.0.1:5000/admin/adjust -d user_id=6 -d amount=1900
+   curl -X POST http://127.0.0.1:5000/admin_manage/adjust -d user_id=6 -d amount=1900
    ```
 5. Reload your dashboard to see the flag.
 
