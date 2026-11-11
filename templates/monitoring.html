@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Monitoring - Learn2Pwn Bank{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Flag monitoring board</h1>
+  <p class="muted">
+    Last 10 verified flags, newest first. In-memory only - it resets whenever the server restarts.
+    <a href="{{ url_for('verify') }}">Verify a flag &rarr;</a>
+  </p>
+  <table>
+    <thead><tr><th>Time</th><th>Name</th><th>Level</th><th>Flag</th></tr></thead>
+    <tbody id="board-body">
+      {% for entry in board %}
+      <tr>
+        <td>{{ entry.time }}</td>
+        <td>{{ entry.username }}</td>
+        <td>{{ entry.mode }}</td>
+        <td><code>{{ entry.flag }}</code></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">No flags verified yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+<script>
+(function () {
+  const tbody = document.getElementById("board-body");
+
+  function render(board) {
+    tbody.textContent = "";
+    if (!board.length) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 4;
+      td.className = "muted";
+      td.textContent = "No flags verified yet.";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    for (const entry of board) {
+      const tr = document.createElement("tr");
+      for (const key of ["time", "username", "mode"]) {
+        const td = document.createElement("td");
+        td.textContent = entry[key];
+        tr.appendChild(td);
+      }
+      const flagTd = document.createElement("td");
+      const code = document.createElement("code");
+      code.textContent = entry.flag;
+      flagTd.appendChild(code);
+      tr.appendChild(flagTd);
+      tbody.appendChild(tr);
+    }
+  }
+
+  const es = new EventSource("{{ url_for('monitoring_stream') }}");
+  es.onmessage = (e) => render(JSON.parse(e.data));
+})();
+</script>
+{% endblock %}

@@ -10,20 +10,23 @@ DO NOT expose this to the internet. It is insecure on purpose.
 import argparse
 import http.cookiejar
 import ipaddress
+import json
 import os
 import secrets
 import socket
 import sqlite3
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import deque
 from functools import wraps
 from html.parser import HTMLParser
 
 from flask import (Flask, Response, abort, flash, g, redirect,
-                   render_template, request, session, url_for)
+                   render_template, request, session, stream_with_context, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from modes import DEFAULT_MODE, MODES
@@ -628,6 +631,91 @@ def csrf_lab_run_bot():
     report = run_victim_bot(url, request.host_url.rstrip("/")) if url else \
         {"ok": False, "log": ["Give the bot a URL to visit first."]}
     return render_template("csrf_lab.html", report=report, last_url=url, nora_balance=_nora_balance())
+
+
+# --------------------------------------------------------------------------
+# Monitoring board: a public, in-memory "who found it" scoreboard. Anyone
+# can submit the flag for whichever mode is currently running and have
+# their name show up live on /monitoring. Deliberately not persisted to
+# the database - it's a classroom convenience, not part of any level, and
+# resets whenever the server restarts.
+# --------------------------------------------------------------------------
+_BOARD_MAX = 10
+_board_lock = threading.Lock()
+_board = deque(maxlen=_BOARD_MAX)  # newest first
+_board_version = 0
+
+
+def _board_add(username, flag, mode_title):
+    global _board_version
+    with _board_lock:
+        _board.appendleft({"username": username, "flag": flag, "mode": mode_title,
+                          "time": time.strftime("%Y-%m-%d %H:%M:%S")})
+        _board_version += 1
+
+
+def _board_snapshot():
+    with _board_lock:
+        return list(_board), _board_version
+
+
+@app.route("/monitoring")
+def monitoring():
+    board, _ = _board_snapshot()
+    return render_template("monitoring.html", board=board)
+
+
+@app.route("/monitoring/stream")
+def monitoring_stream():
+    # Server-Sent Events: a plain long-lived HTTP response, one line of
+    # "data: ..." per update. No extra dependency (unlike real WebSockets),
+    # at the cost of being push-only - which is all this needs. Each
+    # connection is its own thread polling a shared in-memory version
+    # counter twice a second; fine for a classroom, not meant to scale
+    # past that.
+    def gen():
+        last_version = -1
+        while True:
+            board, version = _board_snapshot()
+            if version != last_version:
+                last_version = version
+                yield f"data: {json.dumps(board)}\n\n"
+            time.sleep(0.5)
+
+    return Response(stream_with_context(gen()), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.route("/verify", methods=["GET", "POST"])
+def verify():
+    """Two-step, stateless flag verification: submit the flag; if it
+    matches the mode currently running, a second form asks for a display
+    name, then adds {name, flag, mode, time} to the monitoring board."""
+    stage, validated_flag, error, success = "flag", None, None, None
+    if request.method == "POST":
+        submitted_flag = request.form.get("flag", "").strip()
+        current_flag = mode()["flag"]
+        if request.form.get("stage") == "username":
+            # The flag was already checked once to get here; check again
+            # rather than trusting the hidden field blindly.
+            if not current_flag or submitted_flag != current_flag:
+                error = "That flag isn't valid for the level currently running. Start over."
+            else:
+                username = request.form.get("username", "").strip()[:32]
+                if not username:
+                    error = "Enter a name to show on the board."
+                    stage, validated_flag = "username", submitted_flag
+                else:
+                    _board_add(username, submitted_flag, mode()["title"])
+                    success = f'Added "{username}" to the monitoring board.'
+        elif not current_flag:
+            error = "This mode has no flag to verify (e.g. secure mode)."
+        elif submitted_flag != current_flag:
+            error = "Incorrect flag."
+        else:
+            stage, validated_flag = "username", submitted_flag
+    return render_template("verify.html", stage=stage, validated_flag=validated_flag,
+                           error=error, success=success)
 
 
 @app.errorhandler(404)

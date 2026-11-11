@@ -10,6 +10,8 @@
   <header class="topbar">
     <a class="brand" href="{{ url_for('index') }}">&#x1F3E6; Learn2Pwn Bank</a>
     <nav>
+      <a href="{{ url_for('monitoring') }}">Monitoring</a>
+      <a href="{{ url_for('verify') }}">Verify Flag</a>
       {% if user %}
         <span class="who">{{ user.full_name }}</span>
         <a href="{{ url_for('dashboard') }}">Dashboard</a>

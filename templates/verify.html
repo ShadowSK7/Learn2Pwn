@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Verify a flag - Learn2Pwn Bank{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Verify a flag</h1>
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert alert-ok">{{ success }}</div>{% endif %}
+
+  {% if stage == "username" %}
+  <p class="muted">Flag accepted! Enter a name to show on the
+    <a href="{{ url_for('monitoring') }}">monitoring board</a>.</p>
+  <form method="post">
+    <input type="hidden" name="stage" value="username">
+    <input type="hidden" name="flag" value="{{ validated_flag }}">
+    <label>Your name <input name="username" maxlength="32" required autofocus></label>
+    <button type="submit">Add to board</button>
+  </form>
+  {% else %}
+  <form method="post">
+    <label>Flag <input name="flag" placeholder="L2P{...}" required autofocus></label>
+    <button type="submit">Verify</button>
+  </form>
+  {% endif %}
+</section>
+<p><a href="{{ url_for('monitoring') }}">View monitoring board &rarr;</a></p>
+{% endblock %}

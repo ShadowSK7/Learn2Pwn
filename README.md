@@ -53,6 +53,15 @@ A flag is only written to the database while its own mode is running, so you can
 grab one mode's flag through another mode's bug.
 Spoilers are in [SOLUTIONS.md](SOLUTIONS.md).
 
+## Monitoring board
+
+`/monitoring` is a public, live-updating scoreboard - anyone can open it, no login needed.
+`/verify` lets anyone submit the flag for whichever mode is currently running; once it
+checks out, they pick a display name and it shows up on the board within about half a
+second (via Server-Sent Events, no extra dependency needed). It's a classroom convenience
+for tracking who's solved the current level, not part of any level itself: the board lives
+only in memory and is wiped whenever the server restarts, and it never touches the database.
+
 ## Running it as a network target (attack box on another VM)
 
 By default the app only listens on `127.0.0.1` - nothing outside the machine can reach it.
