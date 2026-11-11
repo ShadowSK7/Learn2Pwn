@@ -152,9 +152,6 @@ CREATE TABLE bank_vault (
 );
 """
 
-# Bump this whenever seed data or schema changes; older databases get re-seeded.
-SEED_VERSION = 4
-
 # The csrf-lab "victim bot" (see run_victim_bot below) logs this account in for
 # real over HTTP, exactly like a browser would, using a password only the
 # server itself knows - the player never sees it and never needs to.
@@ -211,22 +208,18 @@ def sync_mode_data(mode_name):
     db.close()
 
 
-def prepare_db(mode_name, reset=False):
-    init_db(reset=reset)
+def prepare_db(mode_name):
+    init_db()
     sync_mode_data(mode_name)
 
 
-def init_db(reset=False):
+def init_db():
+    """Always starts from a clean, freshly-seeded database. Simpler and more
+    predictable for a classroom session than a --reset flag you have to
+    remember - every run starts the same way, with everyone's balances and
+    the monitoring board both back to a known state."""
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    if os.path.exists(DB_PATH) and not reset:
-        db = sqlite3.connect(DB_PATH)
-        version = db.execute("PRAGMA user_version").fetchone()[0]
-        db.close()
-        if version == SEED_VERSION:
-            return
-        print("[*] Database is from an older version of the app, re-seeding it.")
-        reset = True
-    if reset and os.path.exists(DB_PATH):
+    if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
     db = sqlite3.connect(DB_PATH)
     db.executescript(SCHEMA)
@@ -241,7 +234,6 @@ def init_db(reset=False):
                    " VALUES (?, ?, ?, ?)", SEED_TRANSACTIONS)
     db.executemany("INSERT INTO bank_vault (label, secret) VALUES (?, '')",
                    [(label,) for label in SEED_VAULT])
-    db.execute(f"PRAGMA user_version = {SEED_VERSION}")
     db.commit()
     db.close()
 
@@ -758,7 +750,6 @@ def main():
     parser.add_argument("--host", default="127.0.0.1",
                         help="bind address (default: 127.0.0.1; use 0.0.0.0 with care)")
     parser.add_argument("--port", type=int, default=5000)
-    parser.add_argument("--reset", action="store_true", help="wipe and re-seed the database")
     parser.add_argument("--list-modes", action="store_true", help="list modes and exit")
     parser.add_argument("--debug", action="store_true", help="enable Flask debug mode")
     args = parser.parse_args()
@@ -769,7 +760,7 @@ def main():
         return 0
 
     app.config["MODE"] = args.mode
-    prepare_db(args.mode, reset=args.reset)
+    prepare_db(args.mode)
 
     m = MODES[args.mode]
     print("=" * 64)

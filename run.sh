@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Set up a virtualenv (if needed) and start the app.
-# Usage: ./run.sh [app.py args...]  e.g. ./run.sh --mode hidden_admin --reset
+# Usage: ./run.sh [app.py args...]  e.g. ./run.sh --mode hidden_admin
 set -euo pipefail
 cd "$(dirname "$0")"
 

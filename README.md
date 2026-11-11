@@ -16,6 +16,9 @@ chmod +x run.sh
 
 Then open http://127.0.0.1:5000/, create an account, and go for the goal.
 
+Every start wipes and re-seeds `instance/bank.db` - no `--reset` flag to remember, but also no
+persistence between runs. Don't expect a balance (or the monitoring board) to survive a restart.
+
 Without the helper script:
 
 ```bash
@@ -30,7 +33,6 @@ python3 app.py --mode hidden_admin
 |---|---|
 | `--mode NAME` | vulnerability mode (default `hidden_admin`) |
 | `--list-modes` | show all modes and their goals |
-| `--reset` | wipe and re-seed the database (`instance/bank.db`) |
 | `--host ADDR` | bind address, default `127.0.0.1` (use `0.0.0.0` for a lab VM) |
 | `--port N` | port, default `5000` |
 | `--debug` | Flask debug mode |
@@ -95,7 +97,6 @@ public internet either way, so this stays a closed lab exercise regardless of ho
 ## Seed accounts
 
 `alice / alice123` and `bob / bob123` are ordinary customers. The `admin` and VIP
-accounts get random passwords on every database reset. `nora` is the CSRF lab's victim
-account - her password is never shown anywhere; you're not meant to log in as her, only
-to trick her browser (see `csrf` mode). If you start the app with a database from an
-older version, it is re-seeded automatically.
+accounts get random passwords on every startup (every start re-seeds the database). `nora`
+is the CSRF lab's victim account - her password is never shown anywhere; you're not meant
+to log in as her, only to trick her browser (see `csrf` mode).
