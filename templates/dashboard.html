@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Learn2Pwn Bank{% endblock %}
+{% block content %}
+{% if flag %}
+<div class="flag">&#x1F6A9; Goal reached! Your flag: <code>{{ flag }}</code></div>
+{% endif %}
+
+<div class="grid">
+  <section class="card">
+    <p class="muted">Checking account #{{ user.id }} &middot; {{ user.username }}</p>
+    <p class="balance">{{ user.balance_cents | money }}</p>
+  </section>
+
+  <section class="card">
+    <h2>Send money</h2>
+    <form method="post" action="{{ url_for('transfer') }}">
+      <label>To (username) <input name="to" required></label>
+      <label>Amount (USD) <input name="amount" type="number" step="0.01" min="0.01" required></label>
+      <label>Memo <input name="memo" maxlength="140"></label>
+      <button type="submit">Send</button>
+    </form>
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head">
+    <h2>Recent activity</h2>
+    <span>
+      <a href="{{ url_for('search_transactions') }}">Search</a> &middot;
+      <a href="{{ url_for('statement', account_id=user.id) }}">Full statement &rarr;</a>
+    </span>
+  </div>
+  {% with acct_id = user.id %}{% include "_tx_table.html" %}{% endwith %}
+</section>
+{% endblock %}

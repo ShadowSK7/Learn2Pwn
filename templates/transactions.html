@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Search transactions - Learn2Pwn Bank{% endblock %}
+{% block content %}
+{% if xss_flag %}<script>/* bank internal - do not share */ var XSS_FLAG = "{{ xss_flag }}";</script>{% endif %}
+<section class="card">
+  <h1>Search transactions</h1>
+  <form method="get" class="search">
+    <input name="q" value="{{ q }}" placeholder="Search by memo, e.g. pizza" aria-label="Search memo">
+    <button type="submit">Search</button>
+  </form>
+  {% if error %}<div class="alert alert-error"><code>{{ error }}</code></div>{% endif %}
+  {% if q %}
+    <p class="muted">
+      {% if "xss_search" in mode.vulns %}
+        {# VULN xss_search: search term reflected directly into the page without escaping #}
+        {{ txs | length }} result(s) for &ldquo;{{ q | safe }}&rdquo;
+      {% else %}
+        {{ txs | length }} result(s) for &ldquo;{{ q }}&rdquo;
+      {% endif %}
+    </p>
+  {% endif %}
+  {% with acct_id = user.id %}{% include "_tx_table.html" %}{% endwith %}
+</section>
+<p><a href="{{ url_for('dashboard') }}">&larr; Back to dashboard</a></p>
+{% endblock %}

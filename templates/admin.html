@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Admin panel - Learn2Pwn Bank{% endblock %}
+{% block content %}
+<section class="card admin">
+  <h1>Back office</h1>
+  <p class="muted">{{ users | length }} customers &middot; total deposits {{ total | money }}</p>
+  <table>
+    <thead><tr><th>ID</th><th>Username</th><th>Name</th><th>Role</th><th class="num">Balance</th></tr></thead>
+    <tbody>
+    {% for u in users %}
+      <tr>
+        <td>{{ u.id }}</td>
+        <td>{{ u.username }}</td>
+        <td>{{ u.full_name }}</td>
+        <td>{{ 'admin' if u.is_admin else 'customer' }}</td>
+        <td class="num">{{ u.balance_cents | money }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card admin narrow">
+  <h2>Manual balance adjustment</h2>
+  <form method="post" action="{{ url_for('admin_adjust') }}">
+    <label>Customer
+      <select name="user_id">
+        {% for u in users %}<option value="{{ u.id }}">{{ u.id }} - {{ u.username }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Amount (USD, negative to debit) <input name="amount" type="number" step="0.01" required></label>
+    <label>Memo <input name="memo" maxlength="140" placeholder="Manual adjustment"></label>
+    <button type="submit">Apply</button>
+  </form>
+</section>
+{% endblock %}

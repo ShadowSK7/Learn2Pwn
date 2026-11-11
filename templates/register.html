@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Open account - Learn2Pwn Bank{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Open an account</h1>
+  <form method="post">
+    <label>Full name <input name="full_name" maxlength="64" required></label>
+    <label>Username <input name="username" maxlength="32" autocomplete="username" required></label>
+    <label>Password <input name="password" type="password" minlength="6" autocomplete="new-password" required></label>
+    <button type="submit">Create account</button>
+  </form>
+  <p class="muted">Already a customer? <a href="{{ url_for('login') }}">Log in</a>.</p>
+</section>
+{% endblock %}

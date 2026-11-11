@@ -1,0 +1,29 @@
+{# Transaction table from the point of view of account `acct_id`. #}
+{% if txs %}
+<table>
+  <thead><tr><th>Date</th><th>Details</th><th>Memo</th><th class="num">Amount</th></tr></thead>
+  <tbody>
+  {% for t in txs %}
+    {% set outgoing = t.from_user == acct_id %}
+    <tr>
+      <td>{{ t.created_at }}</td>
+      <td>
+        {% if outgoing %}To {{ t.to_name or 'Bank' }}
+        {% elif t.from_name %}From {{ t.from_name }}
+        {% else %}Bank{% endif %}
+      </td>
+      <td>{{ t.memo }}</td>
+      {% if t.amount_cents is number %}
+        {% set shown = -t.amount_cents if outgoing else t.amount_cents %}
+        <td class="num {{ 'neg' if shown < 0 else 'pos' }}">{{ shown | money }}</td>
+      {% else %}
+        {# Only reachable with injected rows; render whatever came back. #}
+        <td class="num">{{ t.amount_cents }}</td>
+      {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No transactions yet.</p>
+{% endif %}

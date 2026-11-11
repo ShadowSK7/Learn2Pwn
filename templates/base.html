@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Learn2Pwn Bank{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}">&#x1F3E6; Learn2Pwn Bank</a>
+    <nav>
+      {% if user %}
+        <span class="who">{{ user.full_name }}</span>
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        {% if user.is_admin %}<a href="{{ url_for('admin_panel') }}">Admin</a>{% endif %}
+        <a href="{{ url_for('logout') }}">Log out</a>
+      {% else %}
+        <a href="{{ url_for('login') }}">Log in</a>
+        <a href="{{ url_for('register') }}">Open account</a>
+      {% endif %}
+    </nav>
+  </header>
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    Practice target &middot; mode <code>{{ mode_name }}</code> &middot; {{ mode.goal }}
+  </footer>
+</body>
+</html>

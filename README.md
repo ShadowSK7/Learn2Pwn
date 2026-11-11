@@ -1,0 +1,59 @@
+# Learn2Pwn Bank
+
+A deliberately vulnerable online-banking web app for practicing web exploitation.
+Which vulnerabilities are live depends on the **mode** you pick at startup.
+
+> **Warning:** this app is insecure on purpose. Run it only on your own machine or an
+> isolated lab network. It binds to `127.0.0.1` by default.
+
+## Quick start (Ubuntu)
+
+```bash
+sudo apt install python3 python3-venv
+chmod +x run.sh
+./run.sh --mode hidden_admin
+```
+
+Then open http://127.0.0.1:5000/, create an account, and go for the goal.
+
+Without the helper script:
+
+```bash
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+python3 app.py --mode hidden_admin
+```
+
+## Options
+
+| Flag | Meaning |
+|---|---|
+| `--mode NAME` | vulnerability mode (default `hidden_admin`) |
+| `--list-modes` | show all modes and their goals |
+| `--reset` | wipe and re-seed the database (`instance/bank.db`) |
+| `--host ADDR` | bind address, default `127.0.0.1` (use `0.0.0.0` for a lab VM) |
+| `--port N` | port, default `5000` |
+| `--debug` | Flask debug mode |
+
+## Modes
+
+| Mode | Goal |
+|---|---|
+| `hidden_admin` | Level 1: find the admin panel and get $2,000.00 into your own account. |
+| `idor` | Level 2: read the private statement of the bank's VIP customer. |
+| `sqli` | Level 3: extract the vault master code from the bank's database. |
+| `xss` | Level 4: execute JavaScript on the transactions page to read the hidden flag. |
+| `race` | Level 5: double-spend your $100 starting balance into $500+ via concurrent transfers. |
+| `secure` | Every vulnerability fixed, as a reference. |
+
+Flags look like `L2P{...}`. Depending on the mode, a flag appears on your dashboard
+when you reach the goal, or it is hidden in data you shouldn't be able to see.
+A flag is only written to the database while its own mode is running, so you can't
+grab one mode's flag through another mode's bug.
+Spoilers are in [SOLUTIONS.md](SOLUTIONS.md).
+
+## Seed accounts
+
+`alice / alice123` and `bob / bob123` are ordinary customers. The `admin` and VIP
+accounts get random passwords on every database reset. If you start the app with a
+database from an older version, it is re-seeded automatically.

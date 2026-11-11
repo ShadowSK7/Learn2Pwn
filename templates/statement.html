@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Statement #{{ owner.id }} - Learn2Pwn Bank{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <div>
+      <h1>Account statement</h1>
+      <p class="muted">Account #{{ owner.id }} &middot; {{ owner.full_name }} ({{ owner.username }})</p>
+    </div>
+    <div class="num">
+      <p class="muted">Current balance</p>
+      <p class="balance">{{ owner.balance_cents | money }}</p>
+    </div>
+  </div>
+  {% with acct_id = owner.id %}{% include "_tx_table.html" %}{% endwith %}
+</section>
+<p><a href="{{ url_for('dashboard') }}">&larr; Back to dashboard</a></p>
+{% endblock %}
