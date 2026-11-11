@@ -185,12 +185,16 @@ request apart from one the victim meant to submit herself.
    ```
    Notice what's missing: no `csrf_token` field, because you have no way to read one out of
    Nora's session from a different origin. That's exactly the bug this mode leaves open.
-3. Host it on a **different port**, so it's genuinely a different origin from the bank
-   (this is the same thing as hosting it on a different domain entirely in the real world):
+3. Host it somewhere that's a genuinely different origin from the bank - a different port
+   on this machine, or (closer to a real attack) a whole separate VM on the same lab
+   subnet, like an attack box:
    ```bash
    python3 -m http.server 8000
    ```
-4. Back in the CSRF Lab page, paste `http://127.0.0.1:8000/exploit.html` and click
+   The bot will fetch from localhost or any private-network address (10.x/172.16.x/192.168.x),
+   but refuses the public internet - keeps this a safe, self-contained exercise either way.
+4. Back in the CSRF Lab page, paste `http://127.0.0.1:8000/exploit.html` (or your attack
+   box's address, e.g. `http://192.168.56.10:8000/exploit.html`) and click
    **Deliver to victim**. This runs a small bot that logs in as Nora for real over HTTP
    (simulating her browser already being logged in), fetches your page, and submits
    whatever form it finds there - carrying her session cookie, exactly like a real browser

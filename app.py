@@ -9,8 +9,10 @@ DO NOT expose this to the internet. It is insecure on purpose.
 """
 import argparse
 import http.cookiejar
+import ipaddress
 import os
 import secrets
+import socket
 import sqlite3
 import sys
 import time
@@ -529,14 +531,21 @@ class _FirstFormExtractor(HTMLParser):
             self._in_form = False
 
 
-def _is_loopback_url(url):
-    """Restrict the bot to localhost, so it can't be turned into an SSRF
-    tool against other machines or sites."""
+def _is_lab_network_url(url):
+    """Restrict the bot to private/loopback addresses (localhost, plus the
+    RFC 1918 ranges a VM lab subnet uses), so it can follow a two-VM setup
+    (attack box hosting the exploit page) without turning into an SSRF
+    tool against the public internet. The hostname is actually resolved,
+    not just string-matched, so "localhost.example.com"-style tricks can't
+    sneak a public address past this check."""
     try:
         host = urllib.parse.urlparse(url).hostname
-    except ValueError:
+        if not host:
+            return False
+        ip = ipaddress.ip_address(socket.gethostbyname(host))
+    except (ValueError, OSError):
         return False
-    return host in ("127.0.0.1", "localhost", "::1")
+    return ip.is_private  # covers loopback, 10/8, 172.16/12, 192.168/16, link-local, etc.
 
 
 def _nora_balance():
@@ -555,10 +564,12 @@ def run_victim_bot(attacker_url, bank_base):
     code paths a real browser would.
     """
     log = []
-    if not _is_loopback_url(attacker_url):
-        return {"ok": False, "log": ["Refused: the bot only visits localhost/127.0.0.1 pages, to keep"
-                                    " this exercise offline-safe. Host your page with e.g."
-                                    " `python3 -m http.server 8000` and give the bot that URL."]}
+    if not _is_lab_network_url(attacker_url):
+        return {"ok": False, "log": ["Refused: the bot only visits private-network addresses"
+                                    " (localhost, or a 10.x/172.16.x/192.168.x lab IP), never the"
+                                    " public internet. Host your page with e.g."
+                                    " `python3 -m http.server 8000` - on this machine, or on"
+                                    " another VM on the same lab subnet - and give the bot that URL."]}
 
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
     try:
@@ -582,9 +593,9 @@ def run_victim_bot(attacker_url, bank_base):
         return {"ok": False, "log": log + ["No <form action=\"...\"> was found on that page."]}
 
     action_url = urllib.parse.urljoin(attacker_url, form["action"])
-    if not _is_loopback_url(action_url):
+    if not _is_lab_network_url(action_url):
         return {"ok": False, "log": log + [f"Refused: the form's action ({action_url}) isn't a"
-                                           " localhost bank URL."]}
+                                           " private-network bank URL."]}
     log.append(f"Found a form: method={form['method']} action={action_url} fields={form['inputs']}")
 
     query = urllib.parse.urlencode(form["inputs"])
@@ -624,6 +635,31 @@ def not_found(_e):
     return render_template("404.html"), 404
 
 
+def _lan_ip_guesses():
+    """Best-effort list of this machine's non-loopback IPs, for the startup
+    banner when binding to 0.0.0.0 - so you don't have to go run `ip a`
+    yourself to find the address another VM on the lab network should use."""
+    ips = set()
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # UDP connect: just makes the kernel pick a local route/interface
+            # for that destination, no packet is actually sent anywhere.
+            s.connect(("10.255.255.255", 1))
+            ips.add(s.getsockname()[0])
+        finally:
+            s.close()
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ips.add(info[4][0])
+    except OSError:
+        pass
+    ips.discard("127.0.0.1")
+    return sorted(ips)
+
+
 # --------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------
@@ -653,9 +689,19 @@ def main():
     print(f" Mode : {args.mode} ({m['title']})")
     print(f" Goal : {m['goal']}")
     print(f" URL  : http://{args.host}:{args.port}/")
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        lan_ips = _lan_ip_guesses()
+        if lan_ips:
+            print(" Reachable from other machines on your lab network at:")
+            for ip in lan_ips:
+                print(f"        http://{ip}:{args.port}/")
+        else:
+            print(" Could not auto-detect a LAN IP; run `ip a` or `hostname -I` to find one.")
     print("=" * 64)
     if args.host not in ("127.0.0.1", "localhost", "::1"):
-        print(" WARNING: listening on a non-loopback address!", file=sys.stderr)
+        print(" WARNING: listening on a non-loopback address - only do this on an isolated"
+              " lab/VM network, never on the open internet or a shared/corporate network.",
+              file=sys.stderr)
 
     # threaded: lets the dev server handle more than one request at a time,
     # which several modes (e.g. race) rely on to be exploitable at all.

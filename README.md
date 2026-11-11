@@ -53,6 +53,36 @@ A flag is only written to the database while its own mode is running, so you can
 grab one mode's flag through another mode's bug.
 Spoilers are in [SOLUTIONS.md](SOLUTIONS.md).
 
+## Running it as a network target (attack box on another VM)
+
+By default the app only listens on `127.0.0.1` - nothing outside the machine can reach it.
+To let a separate attack-box VM connect to it (the usual pentesting-lab setup: a "target"
+VM running this app and a separate "attacker" VM running Burp/sqlmap/gobuster/etc.):
+
+1. **Put both VMs on the same isolated virtual subnet.** In VirtualBox, use a *Host-only
+   Adapter* or an *Internal Network* (give both VMs the same internal network name, e.g.
+   `lab-net`); in VMware, a custom host-only `vmnet`. Don't bridge either VM to your real
+   network or the internet - this app is deliberately vulnerable.
+2. **Bind to all interfaces** on the target VM:
+   ```bash
+   ./run.sh --host 0.0.0.0 --mode hidden_admin
+   ```
+   The startup banner prints every address other machines on your lab network can reach it
+   at, so you don't need to go run `ip a` yourself.
+3. **If Ubuntu's firewall is on,** allow the port (swap `5000` for `--port` if you changed it):
+   ```bash
+   sudo ufw allow 5000/tcp
+   ```
+4. **From the attack box,** confirm connectivity, then point your tools at it:
+   ```bash
+   curl http://<target-ip>:5000/
+   ```
+
+The CSRF lab's "victim bot" (Level 6) will fetch an exploit page from any private-network
+address (localhost or a `10.x`/`172.16.x`/`192.168.x` IP) - so you can host `exploit.html` on
+the attack box itself, like a real attacker would, not just on the target VM. It refuses the
+public internet either way, so this stays a closed lab exercise regardless of how you host it.
+
 ## Seed accounts
 
 `alice / alice123` and `bob / bob123` are ordinary customers. The `admin` and VIP

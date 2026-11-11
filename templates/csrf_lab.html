@@ -9,7 +9,7 @@
     browser to do something for you instead.
   </p>
   <form method="post" action="{{ url_for('csrf_lab_run_bot') }}">
-    <label>URL of your exploit page (must be on localhost / 127.0.0.1)
+    <label>URL of your exploit page (localhost, or another machine on your lab's private network)
       <input name="url" value="{{ last_url }}" placeholder="http://127.0.0.1:8000/exploit.html" required>
     </label>
     <button type="submit">Deliver to victim</button>
@@ -26,8 +26,9 @@
   <p class="muted">
     Save this as <code>exploit.html</code> in an empty folder, change <code>YOUR_USERNAME_HERE</code> to
     your own username, then from that folder run
-    <code>python3 -m http.server 8000</code> and paste
-    <code>http://127.0.0.1:8000/exploit.html</code> above.
+    <code>python3 -m http.server 8000</code> - on this machine, or on another VM on the same
+    lab subnet (an attack box) - and paste its URL above, e.g.
+    <code>http://127.0.0.1:8000/exploit.html</code>.
   </p>
   <pre><code>&lt;!-- auto-submitting CSRF PoC --&gt;
 &lt;form id="csrf-form" action="{{ url_for('transfer', _external=True) }}" method="POST"&gt;
