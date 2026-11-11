@@ -44,6 +44,7 @@ python3 app.py --mode hidden_admin
 | `sqli` | Level 3: extract the vault master code from the bank's database. |
 | `xss` | Level 4: execute JavaScript on the transactions page to read the hidden flag. |
 | `race` | Level 5: double-spend your $100 starting balance into $500+ via concurrent transfers. |
+| `csrf` | Level 6: get the victim's browser to send you money, without her password. |
 | `secure` | Every vulnerability fixed, as a reference. |
 
 Flags look like `L2P{...}`. Depending on the mode, a flag appears on your dashboard
@@ -55,5 +56,7 @@ Spoilers are in [SOLUTIONS.md](SOLUTIONS.md).
 ## Seed accounts
 
 `alice / alice123` and `bob / bob123` are ordinary customers. The `admin` and VIP
-accounts get random passwords on every database reset. If you start the app with a
-database from an older version, it is re-seeded automatically.
+accounts get random passwords on every database reset. `nora` is the CSRF lab's victim
+account - her password is never shown anywhere; you're not meant to log in as her, only
+to trick her browser (see `csrf` mode). If you start the app with a database from an
+older version, it is re-seeded automatically.

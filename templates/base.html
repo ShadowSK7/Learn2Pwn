@@ -13,6 +13,7 @@
       {% if user %}
         <span class="who">{{ user.full_name }}</span>
         <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        {% if "csrf_transfer" in mode.vulns %}<a href="{{ url_for('csrf_lab') }}">CSRF Lab</a>{% endif %}
         {% if user.is_admin %}<a href="{{ url_for('admin_panel') }}">Admin</a>{% endif %}
         <a href="{{ url_for('logout') }}">Log out</a>
       {% else %}

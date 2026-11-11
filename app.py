@@ -8,12 +8,17 @@ Learn2Pwn Bank - a deliberately vulnerable banking web app for practice.
 DO NOT expose this to the internet. It is insecure on purpose.
 """
 import argparse
+import http.cookiejar
 import os
 import secrets
 import sqlite3
 import sys
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from functools import wraps
+from html.parser import HTMLParser
 
 from flask import (Flask, Response, abort, flash, g, redirect,
                    render_template, request, session, url_for)
@@ -74,6 +79,21 @@ def login_required(view):
     return wrapped
 
 
+def get_csrf_token():
+    """A per-session token for the synchronizer-token CSRF defense.
+
+    It is not rotated on use (like most real frameworks' defaults): an
+    attacker-forged request never has a copy of it, which is all that
+    matters, and a page that's been open in a browser for a while can
+    still submit forms without a stale-token error.
+    """
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
 def parse_amount_cents(raw, allow_negative=False):
     """Parse a dollar string like '12.50' into integer cents, or None."""
     try:
@@ -95,7 +115,8 @@ def money(cents):
 
 @app.context_processor
 def inject_globals():
-    return {"user": current_user(), "mode_name": app.config["MODE"], "mode": mode()}
+    return {"user": current_user(), "mode_name": app.config["MODE"], "mode": mode(),
+            "csrf_token": get_csrf_token}
 
 
 # --------------------------------------------------------------------------
@@ -127,15 +148,23 @@ CREATE TABLE bank_vault (
 """
 
 # Bump this whenever seed data or schema changes; older databases get re-seeded.
-SEED_VERSION = 3
+SEED_VERSION = 4
+
+# The csrf-lab "victim bot" (see run_victim_bot below) logs this account in for
+# real over HTTP, exactly like a browser would, using a password only the
+# server itself knows - the player never sees it and never needs to.
+VICTIM_USERNAME = "nora"
+_VICTIM_PASSWORD = secrets.token_urlsafe(24)
 
 SEED_USERS = [
-    # id order matters: transactions below refer to these ids.
+    # id order matters: transactions below refer to these ids, and so do
+    # some hardcoded account numbers in SOLUTIONS.md - append, don't insert.
     # username, full name, is_admin, balance (cents), password (None = random)
-    ("admin", "Bank Administrator", 1, 0, None),                 # 1
-    ("alice", "Alice Novak", 0, 5_420_17, "alice123"),           # 2
-    ("bob", "Bob Horvath", 0, 312_50, "bob123"),                 # 3
-    ("rvance", "Richard Vance (VIP)", 0, 1_250_000_00, None),    # 4
+    ("admin", "Bank Administrator", 1, 0, None),                       # 1
+    ("alice", "Alice Novak", 0, 5_420_17, "alice123"),                 # 2
+    ("bob", "Bob Horvath", 0, 312_50, "bob123"),                       # 3
+    ("rvance", "Richard Vance (VIP)", 0, 1_250_000_00, None),          # 4
+    (VICTIM_USERNAME, "Nora Kessler", 0, 3_000_00, _VICTIM_PASSWORD),  # 5
 ]
 
 SEED_TRANSACTIONS = [
@@ -368,6 +397,14 @@ def statement(account_id):
 @login_required
 def transfer():
     user = current_user()
+    # VULN csrf_transfer: every other mode requires a token that only a page
+    # served by this site could have read out of the user's own session, so
+    # a form hosted on another origin can't forge a valid transfer. This
+    # mode skips that check entirely - see the CSRF lab for what that costs.
+    if not vuln("csrf_transfer") and request.form.get("csrf_token") != session.get("csrf_token"):
+        flash("Your request couldn't be verified (missing or invalid CSRF token). Please try again.",
+              "error")
+        return redirect(url_for("dashboard"))
     to_username = request.form.get("to", "").strip().lower()
     memo = request.form.get("memo", "").strip()[:140]
     amount = parse_amount_cents(request.form.get("amount"))
@@ -463,6 +500,123 @@ def admin_adjust():
         db.commit()
         flash(f"Adjusted {target['username']} by {money(amount)}.", "ok")
     return redirect(url_for("admin_panel"))
+
+
+# --------------------------------------------------------------------------
+# CSRF lab: a "victim bot" that simulates a logged-in browser visiting
+# whatever page you give it, so you can test a real forged-request attack
+# end to end without needing an actual second person or browser.
+# --------------------------------------------------------------------------
+class _FirstFormExtractor(HTMLParser):
+    """Pulls the action/method/fields out of the first <form> on a page."""
+
+    def __init__(self):
+        super().__init__()
+        self._in_form = False
+        self.form = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "form" and self.form is None:
+            self._in_form = True
+            self.form = {"action": attrs.get("action", ""),
+                        "method": attrs.get("method", "get").upper(), "inputs": {}}
+        elif tag == "input" and self._in_form and attrs.get("name"):
+            self.form["inputs"][attrs["name"]] = attrs.get("value", "")
+
+    def handle_endtag(self, tag):
+        if tag == "form":
+            self._in_form = False
+
+
+def _is_loopback_url(url):
+    """Restrict the bot to localhost, so it can't be turned into an SSRF
+    tool against other machines or sites."""
+    try:
+        host = urllib.parse.urlparse(url).hostname
+    except ValueError:
+        return False
+    return host in ("127.0.0.1", "localhost", "::1")
+
+
+def _nora_balance():
+    row = get_db().execute("SELECT balance_cents FROM users WHERE username = ?",
+                          (VICTIM_USERNAME,)).fetchone()
+    return row["balance_cents"] if row else 0
+
+
+def run_victim_bot(attacker_url, bank_base):
+    """Simulate the victim's already-logged-in browser visiting attacker_url.
+
+    This is a real HTTP client with its own cookie jar - it logs in as the
+    victim over actual HTTP, fetches whatever page you host, and submits
+    whatever <form> it finds there, carrying the victim's session cookie.
+    Nothing here is mocked; it exercises the exact same /login and /transfer
+    code paths a real browser would.
+    """
+    log = []
+    if not _is_loopback_url(attacker_url):
+        return {"ok": False, "log": ["Refused: the bot only visits localhost/127.0.0.1 pages, to keep"
+                                    " this exercise offline-safe. Host your page with e.g."
+                                    " `python3 -m http.server 8000` and give the bot that URL."]}
+
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    try:
+        opener.open(f"{bank_base}/login", urllib.parse.urlencode(
+            {"username": VICTIM_USERNAME, "password": _VICTIM_PASSWORD}).encode(), timeout=5)
+    except (urllib.error.URLError, OSError) as e:
+        return {"ok": False, "log": [f"Bot couldn't reach the bank to log in: {e}"]}
+    log.append("Bot logged in as the victim over HTTP (simulating her already-open session).")
+
+    try:
+        with opener.open(attacker_url, timeout=5) as resp:
+            page_html = resp.read(200_000).decode("utf-8", errors="replace")
+    except (urllib.error.URLError, OSError) as e:
+        return {"ok": False, "log": log + [f"Could not fetch {attacker_url}: {e}"]}
+    log.append(f"Bot fetched {attacker_url}")
+
+    parser = _FirstFormExtractor()
+    parser.feed(page_html)
+    form = parser.form
+    if not form or not form["action"]:
+        return {"ok": False, "log": log + ["No <form action=\"...\"> was found on that page."]}
+
+    action_url = urllib.parse.urljoin(attacker_url, form["action"])
+    if not _is_loopback_url(action_url):
+        return {"ok": False, "log": log + [f"Refused: the form's action ({action_url}) isn't a"
+                                           " localhost bank URL."]}
+    log.append(f"Found a form: method={form['method']} action={action_url} fields={form['inputs']}")
+
+    query = urllib.parse.urlencode(form["inputs"])
+    if form["method"] == "POST":
+        req = urllib.request.Request(action_url, data=query.encode(), method="POST")
+    else:
+        req = urllib.request.Request(f"{action_url}?{query}", method="GET")
+    try:
+        with opener.open(req, timeout=5) as resp:
+            status = resp.status
+    except urllib.error.HTTPError as e:
+        status = e.code
+    except (urllib.error.URLError, OSError) as e:
+        return {"ok": False, "log": log + [f"The forged request failed: {e}"]}
+    log.append(f"Bot submitted the form as the victim -> HTTP {status}")
+    log.append(f"The victim's balance is now {money(_nora_balance())}.")
+    return {"ok": True, "log": log}
+
+
+@app.route("/csrf-lab")
+@login_required
+def csrf_lab():
+    return render_template("csrf_lab.html", report=None, last_url="", nora_balance=_nora_balance())
+
+
+@app.route("/csrf-lab/run-bot", methods=["POST"])
+@login_required
+def csrf_lab_run_bot():
+    url = request.form.get("url", "").strip()
+    report = run_victim_bot(url, request.host_url.rstrip("/")) if url else \
+        {"ok": False, "log": ["Give the bot a URL to visit first."]}
+    return render_template("csrf_lab.html", report=report, last_url=url, nora_balance=_nora_balance())
 
 
 @app.errorhandler(404)

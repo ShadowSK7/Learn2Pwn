@@ -49,6 +49,13 @@ MODES = {
         "flag": "L2P{t0ct0u_tw0_wr1t3rs_0n3_b4l4nc3}",
         "flag_min_balance_cents": 500_00,
     },
+    "csrf": {
+        "title": "Level 6 - CSRF on the transfer form",
+        "goal": "Get the victim's browser to send you money without ever knowing her password.",
+        "vulns": {"csrf_transfer"},
+        "flag": "L2P{n0_t0k3n_n0_pr0bl3m_f0r_th3_4tt4ck3r}",
+        "flag_min_balance_cents": 1000_00,
+    },
 }
 
 DEFAULT_MODE = "hidden_admin"

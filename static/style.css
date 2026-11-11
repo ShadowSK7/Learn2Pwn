@@ -40,6 +40,9 @@ h1, h2 { margin-top: 0; }
 .search { display: flex; gap: 8px; margin-bottom: 16px; }
 .search input { margin-top: 0; flex: 1; }
 code { word-break: break-all; }
+pre { background: #0f1115; color: #d6deeb; padding: 14px 16px; border-radius: 8px;
+     overflow-x: auto; font-size: .85rem; }
+pre code { word-break: normal; background: none; color: inherit; }
 .balance { font-size: 2.4rem; font-weight: 700; margin: 8px 0 0; }
 .muted { color: var(--muted); }
 label { display: block; margin-bottom: 12px; font-size: .9rem; color: var(--muted); }
